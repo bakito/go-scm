@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/blang/semver"
 	"github.com/drone/go-scm/scm"
 	"github.com/drone/go-scm/scm/driver/internal/null"
 )
@@ -25,11 +24,6 @@ import (
 
 // New returns a new Stash API client.
 func New(uri string) (*scm.Client, error) {
-	return NewVersioned(uri, "")
-}
-
-// NewVersioned returns a new versioned Stash API client.
-func NewVersioned(uri string, version string) (*scm.Client, error) {
 	base, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -37,16 +31,7 @@ func NewVersioned(uri string, version string) (*scm.Client, error) {
 	if !strings.HasSuffix(base.Path, "/") {
 		base.Path = base.Path + "/"
 	}
-
-	var stashVersion *semver.Version
-	if len(version) > 0 {
-		stashVersion, err = semver.New(version)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	client := &wrapper{new(scm.Client), stashVersion}
+	client := &wrapper{new(scm.Client)}
 	client.BaseURL = base
 	// initialize services
 	client.Driver = scm.DriverStash
@@ -73,7 +58,6 @@ func NewDefault() *scm.Client {
 // for making http requests and unmarshaling the response.
 type wrapper struct {
 	*scm.Client
-	version *semver.Version
 }
 
 // do wraps the Client.Do function by creating the Request and

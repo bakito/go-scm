@@ -7,10 +7,15 @@ package stash
 import (
 	"context"
 	"fmt"
+	"github.com/blang/semver"
 	"net/url"
 	"strconv"
 
 	"github.com/drone/go-scm/scm"
+)
+
+var (
+	versionSeven, _ = semver.New("7.0.0")
 )
 
 type repository struct {
@@ -205,7 +210,7 @@ func (s *repositoryService) CreateHook(ctx context.Context, repo string, input *
 	in.Config.Secret = input.Secret
 	in.Events = append(
 		input.NativeEvents,
-		convertFromHookEvents(input.Events)...,
+		s.convertFromHookEvents(input.Events)...,
 	)
 	out := new(hook)
 	res, err := s.client.do(ctx, "POST", path, in, out)
@@ -242,7 +247,7 @@ func (s *repositoryService) UpdateHook(ctx context.Context, repo, id string, inp
 	in.Config.Secret = input.Secret
 	in.Events = append(
 		input.NativeEvents,
-		convertFromHookEvents(input.Events)...,
+		s.convertFromHookEvents(input.Events)...,
 	)
 	out := new(hook)
 	res, err := s.client.do(ctx, "PUT", path, in, out)
@@ -324,7 +329,7 @@ func convertHook(from *hook) *scm.Hook {
 	}
 }
 
-func convertFromHookEvents(from scm.HookEvents) []string {
+func (s *repositoryService) convertFromHookEvents(from scm.HookEvents) []string {
 	var events []string
 	if from.Push || from.Branch || from.Tag {
 		events = append(events, "repo:refs_changed")
@@ -335,7 +340,9 @@ func convertFromHookEvents(from scm.HookEvents) []string {
 		events = append(events, "pr:deleted")
 		events = append(events, "pr:opened")
 		events = append(events, "pr:merged")
-		events = append(events, "pr:from_ref_updated")
+		if s.client.version == nil || s.client.version.GE(*versionSeven) {
+			events = append(events, "pr:from_ref_updated")
+		}
 	}
 	if from.PullRequestComment {
 		events = append(events, "pr:comment:added")

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/drone/go-scm/scm"
 )
@@ -209,7 +210,25 @@ func (s *repositoryService) CreateHook(ctx context.Context, repo string, input *
 	)
 	out := new(hook)
 	res, err := s.client.do(ctx, "POST", path, in, out)
+	if err != nil && isUnknownHookEvent(err) {
+		downgradeHookInput(in)
+		res, err = s.client.do(ctx, "POST", path, in, out)
+	}
 	return convertHook(out), res, err
+}
+
+func isUnknownHookEvent(err error) bool {
+	return strings.Contains(err.Error(), "pr:from_ref_updated is unknown")
+}
+
+func downgradeHookInput(in *hookInput) {
+	var events []string
+	for _, event := range in.Events {
+		if event != "pr:from_ref_updated" {
+			events = append(events, event)
+		}
+	}
+	in.Events = events
 }
 
 // CreateStatus creates a new commit status.

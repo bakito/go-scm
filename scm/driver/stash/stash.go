@@ -9,7 +9,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"net/url"
 	"strings"
 
@@ -80,16 +82,19 @@ func (c *wrapper) do(ctx context.Context, method, path string, in, out interface
 	req := &scm.Request{
 		Method: method,
 		Path:   path,
+		Header: map[string][]string{
+			"Accept": {"application/json"},
+		},
 	}
+	println(fmt.Sprintf("Connecting to Bitbucket: %s %s", method, path))
 	// if we are posting or putting data, we need to
 	// write it to the body of the request.
 	if in != nil {
 		buf := new(bytes.Buffer)
 		json.NewEncoder(buf).Encode(in)
-		req.Header = map[string][]string{
-			"Content-Type": {"application/json"},
-		}
+		req.Header["Content-Type"] = []string{"application/json"}
 		req.Body = buf
+		println(fmt.Sprintf("Request Body: %s", buf.String()))
 	}
 
 	// execute the http request
@@ -105,7 +110,15 @@ func (c *wrapper) do(ctx context.Context, method, path string, in, out interface
 		return res, scm.ErrNotAuthorized
 	} else if res.Status > 300 {
 		err := new(Error)
-		json.NewDecoder(res.Body).Decode(err)
+		println(fmt.Sprintf("Error connection to stash / bitbucket Status: %d", res.Status))
+		body, e := ioutil.ReadAll(res.Body)
+		if e != nil {
+			println("Error reading body")
+		} else {
+			println(string(body))
+		}
+
+		_ = json.Unmarshal(body, err)
 		return res, err
 	}
 
@@ -137,7 +150,9 @@ type pagination struct {
 
 // Error represents a Stash error.
 type Error struct {
-	Errors []struct {
+	Message string `json:"message"`
+	Status  int    `json:"status"`
+	Errors  []struct {
 		Message         string `json:"message"`
 		ExceptionName   string `json:"exceptionName"`
 		CurrentVersion  int    `json:"currentVersion"`
@@ -147,6 +162,9 @@ type Error struct {
 
 func (e *Error) Error() string {
 	if len(e.Errors) == 0 {
+		if len(e.Message) > 0 {
+			return fmt.Sprintf("bitbucket: status: %d message: %s", e.Status, e.Message)
+		}
 		return "bitbucket: undefined error"
 	}
 	return e.Errors[0].Message

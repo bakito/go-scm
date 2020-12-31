@@ -265,6 +265,10 @@ func (s *repositoryService) UpdateHook(ctx context.Context, repo, id string, inp
 	)
 	out := new(hook)
 	res, err := s.client.do(ctx, "PUT", path, in, out)
+	if err != nil && isUnknownHookEvent(err) {
+		downgradeHookInput(in)
+		res, err = s.client.do(ctx, "PUT", path, in, out)
+	}
 	return convertHook(out), res, err
 }
 
